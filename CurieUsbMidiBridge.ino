@@ -8,8 +8,8 @@
  *
  * Connections:
  *
- * Hobbytronics TX -> HV/LV -> Arduino D0 
- * Hobbytronics RX <- HV/LV <- Arduino D1 
+ * Hobbytronics TX -> HV/LV -> Arduino101 D0 
+ * Hobbytronics RX <- HV/LV <- Arduino101 D1 
  */
 
 #include <CurieBLE.h>
@@ -54,7 +54,9 @@ void loop() {
   connected = !!BLE.central();
   displayConnectionState();
   if (connected) {
-    while (MIDI.read());
+    while (!isFull() && Serial1.available()) {
+      MIDI.read();
+    }
     sendMessages();
   }
 }
@@ -71,12 +73,7 @@ void loop() {
 // MIDI handler funtions. See http://arduinomidilib.fortyseveneffects.com
 
 void handleMessage3(byte channel, byte number, byte value) {
-  uint8_t status = MIDI.getType() | channel;
-  uint8_t byte1 = number & 0x7F;
-  uint8_t byte2 = value & 0x7F;
-  if (!loadMessage(status, byte1, byte2)) {
-    sendMessages() && loadMessage(status, byte1, byte2);
-  }
+  loadMessage(MIDI.getType() | channel, number & 0x7F, value & 0x7F);
 }
 
 void displayConnectionState() {
@@ -105,11 +102,19 @@ void setupBle() {
   BLE.advertise();
 }
 
+boolean isEmpty() {
+  return byteOffset == 0;
+}
+
+boolean isFull() {
+  return byteOffset > BLE_PACKET_SIZE - 4;
+}
+
 boolean loadMessage(uint8_t status, uint8_t byte1, uint8_t byte2) {
   // Assert BLE_PACKET_SIZE > 4
-  if (byteOffset > BLE_PACKET_SIZE - 4) return false;
+  if (isFull()) return false;
   uint32_t timestamp = millis();
-  boolean empty = byteOffset == 0;
+  boolean empty = isEmpty();
   if (empty) {
     uint8_t headTs = timestamp >> 7;
     headTs |= 1 << 7;  // set the 7th bit
@@ -137,11 +142,9 @@ boolean sendMessage(uint8_t status, uint8_t byte1, uint8_t byte2) {
 }
 
 boolean sendMessages() {
-  if (byteOffset != 0) {
-    midiChar.setValue(midiData, byteOffset);
-    byteOffset = 0;
-    return true;
-  }
-  return false;
+  if (isEmpty()) return false;
+  midiChar.setValue(midiData, byteOffset);
+  byteOffset = 0;
+  return true;
 }
 
