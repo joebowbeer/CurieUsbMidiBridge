@@ -1,4 +1,4 @@
-/* Bridge from USB MIDI to CurieBLE
+/* Bridge from USB MIDI to BLE MIDI for Arduino 101
  *
  * Components:
  *
@@ -8,8 +8,8 @@
  *
  * Connections:
  *
- * Hobbytronics TX -> HV-LV -> Arduino bit 0 
- * Hobbytronics RX <- HV-LV <- Arduino bit 1 
+ * Hobbytronics TX -> HV/LV -> Arduino D0 
+ * Hobbytronics RX <- HV/LV <- Arduino D1 
  */
 
 #include <CurieBLE.h>
@@ -144,3 +144,4 @@ boolean sendMessages() {
   }
   return false;
 }
+
