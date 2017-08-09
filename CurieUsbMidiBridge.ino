@@ -113,7 +113,7 @@ boolean isFull() {
 boolean loadMessage(uint8_t status, uint8_t byte1, uint8_t byte2) {
   // Assert BLE_PACKET_SIZE > 4
   if (isFull()) return false;
-  uint32_t timestamp = millis();
+  uint32_t timestamp = (uint32_t) millis();
   boolean empty = isEmpty();
   if (empty) {
     uint8_t headTs = timestamp >> 7;
