@@ -3,13 +3,13 @@
  * Components:
  *
  * 1. Hobbytronics USB MIDI Host (5v)
- * 2. Bi-directional logic level shifter
- * 3. Arduino 101 (3.3v)
+ * 2. Arduino 101 (3.3v)
  *
  * Connections:
  *
- * Hobbytronics TX -> HV/LV -> Arduino101 D0 
- * Hobbytronics RX <- HV/LV <- Arduino101 D1 
+ * Hobbytronics 5.5v
+ * Hobbytronics GND
+ * Hobbytronics TX -> Arduino101 D0 (RX)
  */
 
 #include <CurieBLE.h>
@@ -61,16 +61,7 @@ void loop() {
   }
 }
 
-//void testNotes() {
-//  noteOn(0, 60, 127);
-//  midiChar.setValue(midiData, 5);
-//  delay(200);
-//  noteOff(0, 60);
-//  midiChar.setValue(midiData, 5);
-//  delay(400);
-//}
-
-// MIDI handler funtions. See http://arduinomidilib.fortyseveneffects.com
+// MIDI handler functions. See http://arduinomidilib.fortyseveneffects.com
 
 void handleMessage3(byte channel, byte number, byte value) {
   loadMessage(MIDI.getType() | channel, number & 0x7F, value & 0x7F);
