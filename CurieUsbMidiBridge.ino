@@ -9,11 +9,12 @@
  *
  * Hobbytronics 5.5v
  * Hobbytronics GND
- * Hobbytronics TX -> Arduino101 D0 (RX)
+ * Hobbytronics TX -> Arduino101 RX (D0)
  */
 
-#include <CurieBLE.h>
 #include <MIDI.h>
+#include <CurieBLE.h>
+#include "BleMidiEncoder.h"
 
 //MIDI_CREATE_DEFAULT_INSTANCE();
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDI);
@@ -21,19 +22,20 @@ MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDI);
 #define LED_PIN LED_BUILTIN
 #define LED_ACTIVE HIGH
 
-#define BLE_PACKET_SIZE 20
-
 // BLE MIDI
 BLEService midiSvc("03B80E5A-EDE8-4B33-A751-6CE34EC4C700");
 BLECharacteristic midiChar("7772E5DB-3868-4112-A1A9-F2669D106BF3",
-    BLEWrite | BLEWriteWithoutResponse | BLENotify | BLERead, BLE_PACKET_SIZE);
+    BLEWrite | BLEWriteWithoutResponse | BLENotify | BLERead,
+    BLE_MIDI_PACKET_SIZE);
 
+class CurieBleMidiEncoder: public BleMidiEncoder {
+  boolean setValue(const unsigned char value[], unsigned char length) {
+    return midiChar.setValue(value, length);
+  }
+};
+
+CurieBleMidiEncoder encoder;
 boolean connected;
-
-uint8_t midiData[BLE_PACKET_SIZE];
-int byteOffset = 0;
-uint8_t lastStatus;
-uint16_t lastTime;
 
 void setup() {
   connected = false;
@@ -47,13 +49,13 @@ void loop() {
   BLE.poll();
   connected = !!BLE.central();
   displayConnectionState();
-  while (!isFull() && MIDI.read() && connected) {
+  while (!encoder.isFull() && MIDI.read() && connected) {
     dispatch();
   }
-  sendMessages();
+  encoder.sendMessages();
 }
 
-// returns false if loadMessage failed due to overflow 
+// returns false if encoder failed due to overflow 
 boolean dispatch() {
   switch (MIDI.getType()) {
     case midi::NoteOff:
@@ -61,11 +63,13 @@ boolean dispatch() {
     //case midi::AfterTouchPoly:
     //case midi::ControlChange:
     //case midi::PitchBend:
-      return loadMessage(3, MIDI.getType() | MIDI.getChannel(), MIDI.getData1(), MIDI.getData2());
+      return encoder.appendMessage(
+          MIDI.getType() | MIDI.getChannel(), MIDI.getData1(), MIDI.getData2());
 
     case midi::ProgramChange:
     //case midi::AfterTouchChannel:
-      return loadMessage(2, MIDI.getType() | MIDI.getChannel(), MIDI.getData1(), 0);
+      return encoder.appendMessage(
+          MIDI.getType() | MIDI.getChannel(), MIDI.getData1());
   }
   return true;
 }
@@ -91,55 +95,8 @@ void setupBle() {
   midiSvc.addCharacteristic(midiChar);
 
   // set an initial value for the characteristic
-  sendMessage(3, 0, 0, 0);
+  encoder.sendMessage(0, 0, 0);
 
   BLE.advertise();
-}
-
-boolean isEmpty() {
-  return byteOffset == 0;
-}
-
-boolean isFull() {
-  return byteOffset > BLE_PACKET_SIZE - 4;
-}
-
-boolean loadMessage(int msglen, uint8_t status, uint8_t byte1, uint8_t byte2) {
-  // Assert BLE_PACKET_SIZE > 4
-  if (isFull()) return false;
-  boolean wasEmpty = isEmpty();
-  uint16_t timestamp = (uint16_t) millis();
-  uint8_t msgTs = timestamp;
-  msgTs |= 1 << 7;  // set the 7th bit
-  if (wasEmpty) {
-    uint8_t headTs = timestamp >> 7;
-    headTs |= 1 << 7;  // set the 7th bit
-    headTs &= ~(1 << 6);  // clear the 6th bit
-    midiData[byteOffset++] = headTs;
-  }
-  if (wasEmpty || lastStatus != status) {
-    midiData[byteOffset++] = msgTs;
-    midiData[byteOffset++] = status;
-  } else if (lastTime != timestamp) {
-    midiData[byteOffset++] = msgTs;   
-  }
-  midiData[byteOffset++] = byte1;
-  if (msglen == 3) {
-    midiData[byteOffset++] = byte2;
-  }
-  lastStatus = status;
-  lastTime = timestamp;
-  return true;
-}
-
-boolean sendMessage(int msglen, uint8_t status, uint8_t byte1, uint8_t byte2) {
-  return loadMessage(msglen, status, byte1, byte2) && sendMessages();
-}
-
-boolean sendMessages() {
-  if (isEmpty()) return false;
-  midiChar.setValue(midiData, byteOffset);
-  byteOffset = 0;
-  return true;
 }
 
