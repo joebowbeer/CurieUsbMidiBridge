@@ -49,10 +49,15 @@ void loop() {
   BLE.poll();
   connected = !!BLE.central();
   displayConnectionState();
-  while (!encoder.isFull() && MIDI.read() && connected) {
-    dispatch();
+
+  boolean overflow = false;
+  while (!overflow && MIDI.read() && connected) {
+    overflow = !dispatch();
   }
   encoder.sendMessages();
+  if (overflow) {
+    dispatch();
+  }
 }
 
 // returns false if encoder failed due to overflow 
